@@ -98,7 +98,15 @@ export default function App() {
         const data = await res.json();
         setBackendAuth(data);
         if (data.authenticated && !auth.currentUser) {
-          await signInAnon();
+          try {
+            await signInAnon();
+          } catch (authErr: any) {
+            console.error('Firebase Anon Auth Error in checkAuth:', authErr);
+            if (authErr.code === 'auth/admin-restricted-operation') {
+              setLoginError('Anonymous Auth is disabled. Please enable it in Firebase Console.');
+              setBackendAuth({ authenticated: false });
+            }
+          }
         }
       } catch (err) {
         console.error('Check auth error:', err);
@@ -387,7 +395,17 @@ export default function App() {
       const data = await res.json();
       if (data.success) {
         setBackendAuth({ authenticated: true, user: { user: username } });
-        await signInAnon();
+        try {
+          await signInAnon();
+        } catch (authErr: any) {
+          console.error('Firebase Anon Auth Error:', authErr);
+          if (authErr.code === 'auth/admin-restricted-operation') {
+            setLoginError('Anonymous Auth is disabled. Please enable it in Firebase Console (Authentication > Sign-in method).');
+            setBackendAuth({ authenticated: false });
+          } else {
+            setLoginError('Firebase Auth failed. Please check your configuration.');
+          }
+        }
       } else {
         setLoginError(data.message || 'Login failed');
       }
@@ -446,7 +464,7 @@ export default function App() {
           
           <div className="mt-8 p-4 bg-blue-50 rounded-2xl border border-blue-100">
             <p className="text-xs text-blue-800 leading-relaxed">
-              <strong>Note:</strong> If Google Login fails on Vercel, ensure you've added your Vercel domain to the <strong>Authorized Domains</strong> list in the Firebase Console (Authentication &gt; Settings).
+              <strong>Note:</strong> Ensure you've enabled <strong>Anonymous Authentication</strong> in the Firebase Console (Authentication &gt; Sign-in method).
             </p>
           </div>
         </motion.div>
