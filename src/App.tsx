@@ -12,7 +12,7 @@ import {
   updateDoc,
   getDocs
 } from 'firebase/firestore';
-import { auth, db, signIn, logOut } from './firebase';
+import { auth, db, logOut, signInAnon } from './firebase';
 import { 
   Account, 
   Expense, 
@@ -74,6 +74,8 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [backendAuth, setBackendAuth] = useState<{authenticated: boolean, user?: any} | null>(null);
+  const [loginError, setLoginError] = useState('');
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
@@ -86,6 +88,20 @@ export default function App() {
   const [notifications, setNotifications] = useState<{id: string, message: string, type: 'info' | 'warning' | 'success'}[]>([]);
 
   useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const res = await fetch('/api/me');
+        const data = await res.json();
+        setBackendAuth(data);
+        if (data.authenticated && !auth.currentUser) {
+          await signInAnon();
+        }
+      } catch (err) {
+        setBackendAuth({ authenticated: false });
+      }
+    };
+    checkAuth();
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
       setLoading(false);
@@ -343,7 +359,38 @@ export default function App() {
     }
   };
 
-  if (loading) {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoginError('');
+    const formData = new FormData(e.currentTarget);
+    const username = formData.get('username') as string;
+    const password = formData.get('password') as string;
+
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBackendAuth({ authenticated: true, user: { user: username } });
+        await signInAnon();
+      } else {
+        setLoginError(data.message || 'Login failed');
+      }
+    } catch (err) {
+      setLoginError('Server error. Please try again.');
+    }
+  };
+
+  const handleLogout = async () => {
+    await fetch('/api/logout', { method: 'POST' });
+    setBackendAuth({ authenticated: false });
+    await logOut();
+  };
+
+  if (loading || backendAuth === null) {
     return (
       <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-zinc-900"></div>
@@ -351,27 +398,53 @@ export default function App() {
     );
   }
 
-  if (!user) {
+  if (!backendAuth.authenticated) {
     return (
       <div className="min-h-screen bg-zinc-50 flex flex-col items-center justify-center p-4">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl border border-zinc-100 text-center"
+          className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl border border-zinc-100"
         >
           <div className="w-16 h-16 bg-zinc-900 rounded-2xl flex items-center justify-center mx-auto mb-6">
             <TrendingUp className="text-white w-8 h-8" />
           </div>
-          <h1 className="text-3xl font-bold text-zinc-900 mb-2">SpendWise</h1>
-          <p className="text-zinc-500 mb-8">Master your finances with precision and ease.</p>
-          <button 
-            onClick={signIn}
-            className="w-full bg-zinc-900 text-white py-4 rounded-2xl font-semibold flex items-center justify-center gap-3 hover:bg-zinc-800 transition-colors"
-          >
-            <LogIn size={20} />
-            Sign in with Google
-          </button>
+          <h1 className="text-3xl font-bold text-zinc-900 mb-2 text-center">SpendWise</h1>
+          <p className="text-zinc-500 mb-8 text-center">Login with your credentials</p>
+          
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-zinc-900">Username</label>
+              <input required name="username" type="text" className="w-full p-4 bg-zinc-50 rounded-2xl border-none focus:ring-2 focus:ring-zinc-900 outline-none" placeholder="Enter username" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-zinc-900">Password</label>
+              <input required name="password" type="password" className="w-full p-4 bg-zinc-50 rounded-2xl border-none focus:ring-2 focus:ring-zinc-900 outline-none" placeholder="Enter password" />
+            </div>
+            {loginError && <p className="text-red-600 text-sm font-medium">{loginError}</p>}
+            <button 
+              type="submit"
+              className="w-full bg-zinc-900 text-white py-4 rounded-2xl font-semibold flex items-center justify-center gap-3 hover:bg-zinc-800 transition-colors"
+            >
+              <LogIn size={20} />
+              Sign In
+            </button>
+          </form>
+          
+          <div className="mt-8 p-4 bg-blue-50 rounded-2xl border border-blue-100">
+            <p className="text-xs text-blue-800 leading-relaxed">
+              <strong>Note:</strong> If Google Login fails on Vercel, ensure you've added your Vercel domain to the <strong>Authorized Domains</strong> list in the Firebase Console (Authentication &gt; Settings).
+            </p>
+          </div>
         </motion.div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-zinc-900"></div>
       </div>
     );
   }
@@ -444,7 +517,7 @@ export default function App() {
             </div>
           </div>
           <button 
-            onClick={logOut}
+            onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-2 text-zinc-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
           >
             <LogOut size={20} />
