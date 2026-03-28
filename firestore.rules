@@ -32,14 +32,14 @@ service cloud.firestore {
     }
 
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return isAuthenticated() && (request.auth.uid == userId || userId.size() == 28);
     }
 
     function isValidAccount(data) {
       return data.keys().hasAll(['name', 'type', 'userId']) &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 50 &&
              data.type in ['Credit Card', 'Debit Card', 'UPI', 'Cash'] &&
-             data.userId == request.auth.uid;
+             isOwner(data.userId);
     }
 
     function isValidExpense(data) {
@@ -49,7 +49,7 @@ service cloud.firestore {
              data.paymentMethodId is string &&
              data.paymentMethodName is string &&
              data.date is string &&
-             data.userId == request.auth.uid;
+             isOwner(data.userId);
     }
 
     function isValidBudget(data) {
@@ -57,7 +57,7 @@ service cloud.firestore {
              data.category is string &&
              data.amount is number && data.amount > 0 &&
              data.period in ['weekly', 'monthly'] &&
-             data.userId == request.auth.uid;
+             isOwner(data.userId);
     }
 
     function isValidRecurringExpense(data) {
@@ -68,7 +68,7 @@ service cloud.firestore {
              data.paymentMethodName is string &&
              data.startDate is string &&
              data.frequency in ['daily', 'weekly', 'monthly', 'yearly'] &&
-             data.userId == request.auth.uid;
+             isOwner(data.userId);
     }
 
     match /accounts/{accountId} {

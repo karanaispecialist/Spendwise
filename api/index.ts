@@ -3,9 +3,21 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import admin from 'firebase-admin';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Initialize Firebase Admin
+try {
+  admin.initializeApp({
+    projectId: 'ai-studio-applet-webapp-37f1b'
+  });
+  console.log('Firebase Admin initialized');
+} catch (err) {
+  console.error('Firebase Admin init error:', err);
+}
 
 const JWT_SECRET = process.env.JWT_SECRET || 'spendwise-super-secret-key-change-this-in-production';
 
@@ -16,20 +28,31 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Custom Login API
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   console.log('Login attempt for:', req.body.username);
   const { username, password } = req.body;
 
   if (username === 'karanverma005' && password === 'kashi2605') {
     console.log('Login successful');
-    const token = jwt.sign({ user: username }, JWT_SECRET, { expiresIn: '24h' });
+    // Generate a stable UID based on the username
+    const stableUserId = crypto.createHash('sha256').update(username + JWT_SECRET).digest('hex').substring(0, 28);
+    
+    let firebaseToken = '';
+    try {
+      firebaseToken = await admin.auth().createCustomToken(stableUserId);
+      console.log('Firebase Custom Token generated');
+    } catch (err) {
+      console.error('Error creating custom token:', err);
+    }
+
+    const token = jwt.sign({ user: username, stableUserId, firebaseToken }, JWT_SECRET, { expiresIn: '24h' });
     res.cookie('auth_token', token, { 
       httpOnly: true, 
       secure: true, 
       sameSite: 'none',
       maxAge: 24 * 60 * 60 * 1000 
     });
-    return res.json({ success: true, username });
+    return res.json({ success: true, username, stableUserId, firebaseToken });
   }
 
   console.log('Login failed: Invalid credentials');
@@ -46,7 +69,7 @@ app.get('/api/me', (req, res) => {
   if (!token) return res.status(401).json({ authenticated: false });
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded: any = jwt.verify(token, JWT_SECRET);
     res.json({ authenticated: true, user: decoded });
   } catch (err) {
     res.status(401).json({ authenticated: false });

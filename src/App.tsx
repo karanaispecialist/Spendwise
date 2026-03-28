@@ -12,7 +12,7 @@ import {
   updateDoc,
   getDocs
 } from 'firebase/firestore';
-import { auth, db, logOut, signInAnon } from './firebase';
+import { auth, db, logOut, signInAnon, signInCustom } from './firebase';
 import { 
   Account, 
   Expense, 
@@ -43,7 +43,8 @@ import {
   Calendar,
   Repeat,
   AlertTriangle,
-  CheckCircle2
+  CheckCircle2,
+  Search
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
@@ -74,7 +75,7 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [backendAuth, setBackendAuth] = useState<{authenticated: boolean, user?: any} | null>(null);
+  const [backendAuth, setBackendAuth] = useState<{authenticated: boolean, user?: {user: string, stableUserId: string, firebaseToken?: string}} | null>(null);
   const [loginError, setLoginError] = useState('');
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -86,6 +87,10 @@ export default function App() {
   const [showAddBudget, setShowAddBudget] = useState(false);
   const [showAddRecurring, setShowAddRecurring] = useState(false);
   const [notifications, setNotifications] = useState<{id: string, message: string, type: 'info' | 'warning' | 'success'}[]>([]);
+  const [filterCategory, setFilterCategory] = useState<string>('All');
+  const [filterMonth, setFilterMonth] = useState<string>('All');
+  const [filterYear, setFilterYear] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -100,7 +105,12 @@ export default function App() {
         setBackendAuth(data);
         if (data.authenticated && !auth.currentUser) {
           try {
-            await signInAnon();
+            if (data.user?.firebaseToken) {
+              await signInCustom(data.user.firebaseToken);
+              console.log('Signed in with custom token');
+            } else {
+              await signInAnon();
+            }
           } catch (authErr: any) {
             console.error('Firebase Anon Auth Error in checkAuth:', authErr);
             if (authErr.code === 'auth/admin-restricted-operation') {
@@ -137,25 +147,27 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !backendAuth?.user?.stableUserId) return;
 
-    const qAccounts = query(collection(db, 'accounts'), where('userId', '==', user.uid));
+    const stableUid = backendAuth.user.stableUserId;
+
+    const qAccounts = query(collection(db, 'accounts'), where('userId', '==', stableUid));
     const unsubAccounts = onSnapshot(qAccounts, (snapshot) => {
       setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account)));
     });
 
-    const qExpenses = query(collection(db, 'expenses'), where('userId', '==', user.uid));
+    const qExpenses = query(collection(db, 'expenses'), where('userId', '==', stableUid));
     const unsubExpenses = onSnapshot(qExpenses, (snapshot) => {
       const exps = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense));
       setExpenses(exps.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     });
 
-    const qBudgets = query(collection(db, 'budgets'), where('userId', '==', user.uid));
+    const qBudgets = query(collection(db, 'budgets'), where('userId', '==', stableUid));
     const unsubBudgets = onSnapshot(qBudgets, (snapshot) => {
       setBudgets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Budget)));
     });
 
-    const qRecurring = query(collection(db, 'recurring_expenses'), where('userId', '==', user.uid));
+    const qRecurring = query(collection(db, 'recurring_expenses'), where('userId', '==', stableUid));
     const unsubRecurring = onSnapshot(qRecurring, (snapshot) => {
       setRecurringExpenses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RecurringExpense)));
     });
@@ -166,7 +178,7 @@ export default function App() {
       unsubBudgets();
       unsubRecurring();
     };
-  }, [user]);
+  }, [user, backendAuth]);
 
   // Process Recurring Expenses
   useEffect(() => {
@@ -262,7 +274,8 @@ export default function App() {
 
   const handleAddAccount = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || !backendAuth?.user?.stableUserId) return;
+    const stableUid = backendAuth.user.stableUserId;
     const formData = new FormData(e.currentTarget);
     const name = formData.get('name') as string;
     const type = formData.get('type') as any;
@@ -273,7 +286,7 @@ export default function App() {
         name,
         type,
         balance,
-        userId: user.uid
+        userId: stableUid
       });
       setShowAddAccount(false);
     } catch (err) {
@@ -283,7 +296,8 @@ export default function App() {
 
   const handleAddExpense = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || !backendAuth?.user?.stableUserId) return;
+    const stableUid = backendAuth.user.stableUserId;
     const formData = new FormData(e.currentTarget);
     const amount = parseFloat(formData.get('amount') as string);
     const category = formData.get('category') as string;
@@ -301,7 +315,7 @@ export default function App() {
         paymentMethodName: account?.name || 'Unknown',
         description,
         date: date || new Date().toISOString(),
-        userId: user.uid
+        userId: stableUid
       });
       setShowAddExpense(false);
     } catch (err) {
@@ -311,7 +325,8 @@ export default function App() {
 
   const handleAddBudget = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || !backendAuth?.user?.stableUserId) return;
+    const stableUid = backendAuth.user.stableUserId;
     const formData = new FormData(e.currentTarget);
     const amount = parseFloat(formData.get('amount') as string);
     const category = formData.get('category') as string;
@@ -322,7 +337,7 @@ export default function App() {
         amount,
         category,
         period,
-        userId: user.uid
+        userId: stableUid
       });
       setShowAddBudget(false);
       addNotification(`Budget for ${category} created successfully!`, "success");
@@ -333,7 +348,8 @@ export default function App() {
 
   const handleAddRecurring = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || !backendAuth?.user?.stableUserId) return;
+    const stableUid = backendAuth.user.stableUserId;
     const formData = new FormData(e.currentTarget);
     const amount = parseFloat(formData.get('amount') as string);
     const category = formData.get('category') as string;
@@ -355,7 +371,7 @@ export default function App() {
         startDate,
         endDate: endDate || null,
         frequency,
-        userId: user.uid,
+        userId: stableUid,
         lastLoggedDate: null
       });
       setShowAddRecurring(false);
@@ -372,6 +388,18 @@ export default function App() {
       console.error("Error deleting expense:", err);
     }
   };
+
+  const filteredExpenses = expenses.filter(exp => {
+    const categoryMatch = filterCategory === 'All' || exp.category === filterCategory;
+    const date = parseISO(exp.date);
+    const monthMatch = filterMonth === 'All' || format(date, 'MM') === filterMonth;
+    const yearMatch = filterYear === 'All' || format(date, 'yyyy') === filterYear;
+    const searchMatch = searchQuery === '' || 
+      exp.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      exp.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      exp.paymentMethodName.toLowerCase().includes(searchQuery.toLowerCase());
+    return categoryMatch && monthMatch && yearMatch && searchMatch;
+  });
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -403,9 +431,13 @@ export default function App() {
 
       const data = await res.json();
       if (data.success) {
-        setBackendAuth({ authenticated: true, user: { user: username } });
+        setBackendAuth({ authenticated: true, user: { user: username, stableUserId: data.stableUserId, firebaseToken: data.firebaseToken } });
         try {
-          await signInAnon();
+          if (data.firebaseToken) {
+            await signInCustom(data.firebaseToken);
+          } else {
+            await signInAnon();
+          }
         } catch (authErr: any) {
           console.error('Firebase Anon Auth Error:', authErr);
           if (authErr.code === 'auth/admin-restricted-operation') {
@@ -489,8 +521,8 @@ export default function App() {
     );
   }
 
-  const totalSpent = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-  const monthlySpent = expenses
+  const totalSpent = filteredExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const monthlySpent = filteredExpenses
     .filter(exp => {
       const expDate = parseISO(exp.date);
       return isWithinInterval(expDate, { start: startOfMonth(new Date()), end: endOfMonth(new Date()) });
@@ -499,13 +531,33 @@ export default function App() {
 
   const categoryData = CATEGORIES.map(cat => ({
     name: cat,
-    value: expenses.filter(exp => exp.category === cat).reduce((sum, exp) => sum + exp.amount, 0)
+    value: filteredExpenses.filter(exp => exp.category === cat).reduce((sum, exp) => sum + exp.amount, 0)
   })).filter(d => d.value > 0);
 
   const accountData = accounts.map(acc => ({
     name: acc.name,
-    value: expenses.filter(exp => exp.paymentMethodId === acc.id).reduce((sum, exp) => sum + exp.amount, 0)
+    value: filteredExpenses.filter(exp => exp.paymentMethodId === acc.id).reduce((sum, exp) => sum + exp.amount, 0)
   })).filter(d => d.value > 0);
+
+  // Generate options for filters
+  const yearOptions = Array.from({ length: 5 }, (_, i) => {
+    return (new Date().getFullYear() - i).toString();
+  });
+
+  const monthOptions = [
+    { label: 'January', value: '01' },
+    { label: 'February', value: '02' },
+    { label: 'March', value: '03' },
+    { label: 'April', value: '04' },
+    { label: 'May', value: '05' },
+    { label: 'June', value: '06' },
+    { label: 'July', value: '07' },
+    { label: 'August', value: '08' },
+    { label: 'September', value: '09' },
+    { label: 'October', value: '10' },
+    { label: 'November', value: '11' },
+    { label: 'December', value: '12' },
+  ];
 
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col md:flex-row">
@@ -569,21 +621,81 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 p-4 md:p-8 overflow-y-auto">
         <header className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-2xl font-bold text-zinc-900">
-              {activeTab === 'dashboard' && 'Financial Overview'}
-              {activeTab === 'expenses' && 'Transaction History'}
-              {activeTab === 'accounts' && 'Payment Methods'}
-              {activeTab === 'budgets' && 'Budget Planning'}
-              {activeTab === 'recurring' && 'Recurring Expenses'}
-            </h2>
-            <p className="text-zinc-500">
-              {activeTab === 'dashboard' && 'Your spending habits at a glance'}
-              {activeTab === 'expenses' && 'Keep track of every penny'}
-              {activeTab === 'accounts' && 'Manage your cards and wallets'}
-              {activeTab === 'budgets' && 'Control your spending by category'}
-              {activeTab === 'recurring' && 'Automate your regular bills'}
-            </p>
+          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+            <div>
+              <h2 className="text-2xl font-bold text-zinc-900">
+                {activeTab === 'dashboard' && 'Financial Overview'}
+                {activeTab === 'expenses' && 'Transaction History'}
+                {activeTab === 'accounts' && 'Payment Methods'}
+                {activeTab === 'budgets' && 'Budget Planning'}
+                {activeTab === 'recurring' && 'Recurring Expenses'}
+              </h2>
+              <p className="text-zinc-500">
+                {activeTab === 'dashboard' && 'Your spending habits at a glance'}
+                {activeTab === 'expenses' && 'Keep track of every penny'}
+                {activeTab === 'accounts' && 'Manage your cards and wallets'}
+                {activeTab === 'budgets' && 'Control your spending by category'}
+                {activeTab === 'recurring' && 'Automate your regular bills'}
+              </p>
+            </div>
+
+            {(activeTab === 'dashboard' || activeTab === 'expenses') && (
+              <div className="flex flex-wrap gap-2 mt-2 md:mt-0 md:ml-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+                  <input 
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search expenses..."
+                    className="pl-9 pr-4 py-2 bg-white border border-zinc-200 text-sm rounded-xl outline-none focus:ring-2 focus:ring-zinc-900 w-full md:w-48"
+                  />
+                </div>
+                <select 
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                  className="bg-white border border-zinc-200 text-sm rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-zinc-900"
+                >
+                  <option value="All">All Categories</option>
+                  {CATEGORIES.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+                <select 
+                  value={filterMonth}
+                  onChange={(e) => setFilterMonth(e.target.value)}
+                  className="bg-white border border-zinc-200 text-sm rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-zinc-900"
+                >
+                  <option value="All">All Months</option>
+                  {monthOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <select 
+                  value={filterYear}
+                  onChange={(e) => setFilterYear(e.target.value)}
+                  className="bg-white border border-zinc-200 text-sm rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-zinc-900"
+                >
+                  <option value="All">All Years</option>
+                  {yearOptions.map(year => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+                {(filterCategory !== 'All' || filterMonth !== 'All' || filterYear !== 'All' || searchQuery !== '') && (
+                  <button 
+                    onClick={() => { 
+                      setFilterCategory('All'); 
+                      setFilterMonth('All'); 
+                      setFilterYear('All');
+                      setSearchQuery('');
+                    }}
+                    className="text-xs font-bold text-zinc-400 hover:text-zinc-900 px-2"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex gap-3">
             {activeTab === 'budgets' && (
@@ -740,11 +852,11 @@ export default function App() {
                   <button onClick={() => setActiveTab('expenses')} className="text-sm font-medium text-zinc-500 hover:text-zinc-900">View All</button>
                 </div>
                 <div className="divide-y divide-zinc-100">
-                  {expenses.slice(0, 5).map(exp => (
+                  {filteredExpenses.slice(0, 5).map(exp => (
                     <ExpenseItem key={exp.id} expense={exp} onDelete={() => deleteExpense(exp.id!)} />
                   ))}
-                  {expenses.length === 0 && (
-                    <div className="p-12 text-center text-zinc-500">No transactions yet.</div>
+                  {filteredExpenses.length === 0 && (
+                    <div className="p-12 text-center text-zinc-500">No transactions match your filters.</div>
                   )}
                 </div>
               </div>
@@ -760,11 +872,11 @@ export default function App() {
               className="bg-white rounded-3xl border border-zinc-200 shadow-sm overflow-hidden"
             >
               <div className="divide-y divide-zinc-100">
-                {expenses.map(exp => (
+                {filteredExpenses.map(exp => (
                   <ExpenseItem key={exp.id} expense={exp} onDelete={() => deleteExpense(exp.id!)} />
                 ))}
-                {expenses.length === 0 && (
-                  <div className="p-12 text-center text-zinc-500">No transactions recorded.</div>
+                {filteredExpenses.length === 0 && (
+                  <div className="p-12 text-center text-zinc-500">No transactions recorded for selected filters.</div>
                 )}
               </div>
             </motion.div>
