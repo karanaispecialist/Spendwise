@@ -15,9 +15,11 @@ async function startServer() {
 
   // Custom Login API
   app.post('/api/login', (req, res) => {
+    console.log('Login attempt for:', req.body.username);
     const { username, password } = req.body;
 
     if (username === 'karanverma005' && password === 'kashi2605') {
+      console.log('Login successful');
       const token = jwt.sign({ user: username }, JWT_SECRET, { expiresIn: '24h' });
       res.cookie('auth_token', token, { 
         httpOnly: true, 
@@ -28,6 +30,7 @@ async function startServer() {
       return res.json({ success: true, username });
     }
 
+    console.log('Login failed: Invalid credentials');
     res.status(401).json({ success: false, message: 'Invalid credentials' });
   });
 

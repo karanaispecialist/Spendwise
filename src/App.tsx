@@ -91,12 +91,17 @@ export default function App() {
     const checkAuth = async () => {
       try {
         const res = await fetch('/api/me');
+        if (!res.ok) {
+          setBackendAuth({ authenticated: false });
+          return;
+        }
         const data = await res.json();
         setBackendAuth(data);
         if (data.authenticated && !auth.currentUser) {
           await signInAnon();
         }
       } catch (err) {
+        console.error('Check auth error:', err);
         setBackendAuth({ authenticated: false });
       }
     };
@@ -372,6 +377,13 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ message: 'Server returned an error' }));
+        setLoginError(errorData.message || `Error: ${res.status}`);
+        return;
+      }
+
       const data = await res.json();
       if (data.success) {
         setBackendAuth({ authenticated: true, user: { user: username } });
@@ -380,7 +392,8 @@ export default function App() {
         setLoginError(data.message || 'Login failed');
       }
     } catch (err) {
-      setLoginError('Server error. Please try again.');
+      console.error('Login fetch error:', err);
+      setLoginError('Network error or server is down. Please try again.');
     }
   };
 
