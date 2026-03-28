@@ -1,0 +1,106 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: accounts
+    // Document ID: auto-generated
+    // Fields:
+    //   - name: string (required, 1-50 chars)
+    //   - type: string (required, enum: Credit Card, Debit Card, UPI, Cash)
+    //   - balance: number (optional)
+    //   - userId: string (required, immutable)
+    //
+    // Collection: expenses
+    // Document ID: auto-generated
+    // Fields:
+    //   - amount: number (required, positive)
+    //   - category: string (required, enum: Food, Entertainment, etc.)
+    //   - paymentMethodId: string (required, references accounts/{id})
+    //   - paymentMethodName: string (required)
+    //   - description: string (optional, < 200 chars)
+    //   - date: string (required, ISO 8601 format)
+    //   - userId: string (required, immutable)
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidAccount(data) {
+      return data.keys().hasAll(['name', 'type', 'userId']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 50 &&
+             data.type in ['Credit Card', 'Debit Card', 'UPI', 'Cash'] &&
+             data.userId == request.auth.uid;
+    }
+
+    function isValidExpense(data) {
+      return data.keys().hasAll(['amount', 'category', 'paymentMethodId', 'paymentMethodName', 'date', 'userId']) &&
+             data.amount is number && data.amount > 0 &&
+             data.category is string &&
+             data.paymentMethodId is string &&
+             data.paymentMethodName is string &&
+             data.date is string &&
+             data.userId == request.auth.uid;
+    }
+
+    function isValidBudget(data) {
+      return data.keys().hasAll(['category', 'amount', 'period', 'userId']) &&
+             data.category is string &&
+             data.amount is number && data.amount > 0 &&
+             data.period in ['weekly', 'monthly'] &&
+             data.userId == request.auth.uid;
+    }
+
+    function isValidRecurringExpense(data) {
+      return data.keys().hasAll(['amount', 'category', 'paymentMethodId', 'paymentMethodName', 'startDate', 'frequency', 'userId']) &&
+             data.amount is number && data.amount > 0 &&
+             data.category is string &&
+             data.paymentMethodId is string &&
+             data.paymentMethodName is string &&
+             data.startDate is string &&
+             data.frequency in ['daily', 'weekly', 'monthly', 'yearly'] &&
+             data.userId == request.auth.uid;
+    }
+
+    match /accounts/{accountId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidAccount(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidAccount(request.resource.data) &&
+                      request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidExpense(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidExpense(request.resource.data) &&
+                      request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    match /budgets/{budgetId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidBudget(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidBudget(request.resource.data) &&
+                      request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    match /recurring_expenses/{recurringId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidRecurringExpense(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidRecurringExpense(request.resource.data) &&
+                      request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(resource.data.userId);
+    }
+  }
+}

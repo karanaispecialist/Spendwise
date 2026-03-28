@@ -1,0 +1,78 @@
+{
+  "entities": {
+    "Expense": {
+      "title": "Expense",
+      "description": "A single expenditure record.",
+      "type": "object",
+      "properties": {
+        "amount": { "type": "number", "description": "The amount spent." },
+        "category": { "type": "string", "description": "Category like Food, Entertainment, etc." },
+        "paymentMethod": { "type": "string", "description": "Account used: Credit Card, Debit Card, UPI, Cash." },
+        "description": { "type": "string", "description": "Brief note about the expense." },
+        "date": { "type": "string", "format": "date-time", "description": "When the expense occurred." },
+        "userId": { "type": "string", "description": "The UID of the user who owns this record." }
+      },
+      "required": ["amount", "category", "paymentMethod", "date", "userId"]
+    },
+    "Account": {
+      "title": "Account",
+      "description": "A payment method or account.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the account (e.g., HDFC Credit Card)." },
+        "type": { "type": "string", "enum": ["Credit Card", "Debit Card", "UPI", "Cash"], "description": "Type of account." },
+        "balance": { "type": "number", "description": "Current balance or limit." },
+        "userId": { "type": "string", "description": "The UID of the user who owns this account." }
+      },
+      "required": ["name", "type", "userId"]
+    },
+    "Budget": {
+      "title": "Budget",
+      "description": "A budget limit for a category.",
+      "type": "object",
+      "properties": {
+        "category": { "type": "string" },
+        "amount": { "type": "number" },
+        "period": { "type": "string", "enum": ["weekly", "monthly"] },
+        "userId": { "type": "string" }
+      },
+      "required": ["category", "amount", "period", "userId"]
+    },
+    "RecurringExpense": {
+      "title": "RecurringExpense",
+      "description": "An expense that repeats automatically.",
+      "type": "object",
+      "properties": {
+        "amount": { "type": "number" },
+        "category": { "type": "string" },
+        "paymentMethodId": { "type": "string" },
+        "paymentMethodName": { "type": "string" },
+        "description": { "type": "string" },
+        "startDate": { "type": "string", "format": "date-time" },
+        "endDate": { "type": "string", "format": "date-time" },
+        "frequency": { "type": "string", "enum": ["daily", "weekly", "monthly", "yearly"] },
+        "userId": { "type": "string" },
+        "lastLoggedDate": { "type": "string", "format": "date-time" }
+      },
+      "required": ["amount", "category", "paymentMethodId", "paymentMethodName", "startDate", "frequency", "userId"]
+    }
+  },
+  "firestore": {
+    "/expenses/{expenseId}": {
+      "schema": "Expense",
+      "description": "Collection of user expenses."
+    },
+    "/accounts/{accountId}": {
+      "schema": "Account",
+      "description": "Collection of user payment accounts."
+    },
+    "/budgets/{budgetId}": {
+      "schema": "Budget",
+      "description": "Collection of user budgets."
+    },
+    "/recurring_expenses/{recurringId}": {
+      "schema": "RecurringExpense",
+      "description": "Collection of recurring expense definitions."
+    }
+  }
+}
