@@ -4,7 +4,7 @@ import path from 'path';
 import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = 'spendwise-super-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET || 'spendwise-super-secret-key-change-this-in-production';
 
 async function startServer() {
   const app = express();
@@ -52,13 +52,17 @@ async function startServer() {
   });
 
   // Vite middleware for development
-  if (process.env.NODE_ENV !== 'production') {
+  const isDev = process.env.NODE_ENV === 'development';
+
+  if (isDev) {
+    console.log('Running in development mode with Vite middleware');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
+    console.log('Running in production mode');
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {

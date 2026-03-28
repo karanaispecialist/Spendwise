@@ -92,6 +92,7 @@ export default function App() {
       try {
         const res = await fetch('/api/me');
         if (!res.ok) {
+          console.error('Auth check failed with status:', res.status);
           setBackendAuth({ authenticated: false });
           return;
         }
@@ -109,7 +110,7 @@ export default function App() {
           }
         }
       } catch (err) {
-        console.error('Check auth error:', err);
+        console.error('Check auth network error:', err);
         setBackendAuth({ authenticated: false });
       }
     };
@@ -387,8 +388,16 @@ export default function App() {
       });
       
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ message: 'Server returned an error' }));
-        setLoginError(errorData.message || `Error: ${res.status}`);
+        const errorText = await res.text();
+        let errorMessage = `Server error: ${res.status}`;
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+          // If not JSON, use the status code
+          console.error('Non-JSON error response:', errorText);
+        }
+        setLoginError(errorMessage);
         return;
       }
 
