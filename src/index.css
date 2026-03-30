@@ -1,1 +1,41 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply bg-zinc-50 text-zinc-900 antialiased;
+    overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile if not needed */
+  }
+
+  /* Custom scrollbar for desktop */
+  @media (min-width: 768px) {
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      @apply bg-transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      @apply bg-zinc-200 rounded-full hover:bg-zinc-300 transition-colors;
+    }
+  }
+}
+
+@layer components {
+  .mobile-nav-active {
+    @apply text-zinc-900 scale-110;
+  }
+  
+  .btn-touch {
+    @apply active:scale-95 transition-transform duration-100;
+  }
+}

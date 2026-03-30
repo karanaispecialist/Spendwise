@@ -44,7 +44,8 @@ import {
   Repeat,
   AlertTriangle,
   CheckCircle2,
-  Search
+  Search,
+  User as UserIcon
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
@@ -90,6 +91,8 @@ export default function App() {
   const [filterCategory, setFilterCategory] = useState<string>('All');
   const [filterMonth, setFilterMonth] = useState<string>('All');
   const [filterYear, setFilterYear] = useState<string>('All');
+  const [filterStartDate, setFilterStartDate] = useState<string>('');
+  const [filterEndDate, setFilterEndDate] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   useEffect(() => {
@@ -394,11 +397,20 @@ export default function App() {
     const date = parseISO(exp.date);
     const monthMatch = filterMonth === 'All' || format(date, 'MM') === filterMonth;
     const yearMatch = filterYear === 'All' || format(date, 'yyyy') === filterYear;
+    
+    let dateRangeMatch = true;
+    if (filterStartDate) {
+      dateRangeMatch = dateRangeMatch && (isAfter(date, parseISO(filterStartDate)) || isSameDay(date, parseISO(filterStartDate)));
+    }
+    if (filterEndDate) {
+      dateRangeMatch = dateRangeMatch && (isBefore(date, parseISO(filterEndDate)) || isSameDay(date, parseISO(filterEndDate)));
+    }
+
     const searchMatch = searchQuery === '' || 
       exp.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       exp.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
       exp.paymentMethodName.toLowerCase().includes(searchQuery.toLowerCase());
-    return categoryMatch && monthMatch && yearMatch && searchMatch;
+    return categoryMatch && monthMatch && yearMatch && dateRangeMatch && searchMatch;
   });
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -560,9 +572,9 @@ export default function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-zinc-50 flex flex-col md:flex-row">
+    <div className="min-h-screen bg-zinc-50 flex flex-col md:flex-row pb-20 md:pb-0">
       {/* Notifications */}
-      <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
+      <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none max-w-[calc(100vw-2rem)]">
         <AnimatePresence>
           {notifications.map(n => (
             <motion.div
@@ -570,23 +582,23 @@ export default function App() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className={`p-4 rounded-2xl shadow-xl border flex items-center gap-3 pointer-events-auto min-w-[300px] ${
+              className={`p-4 rounded-2xl shadow-xl border flex items-center gap-3 pointer-events-auto min-w-[280px] md:min-w-[300px] ${
                 n.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-900' :
                 n.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' :
                 'bg-blue-50 border-blue-200 text-blue-900'
               }`}
             >
-              {n.type === 'warning' && <AlertTriangle size={20} />}
-              {n.type === 'success' && <CheckCircle2 size={20} />}
-              {n.type === 'info' && <Bell size={20} />}
+              {n.type === 'warning' && <AlertTriangle size={20} className="shrink-0" />}
+              {n.type === 'success' && <CheckCircle2 size={20} className="shrink-0" />}
+              {n.type === 'info' && <Bell size={20} className="shrink-0" />}
               <p className="text-sm font-medium">{n.message}</p>
             </motion.div>
           ))}
         </AnimatePresence>
       </div>
 
-      {/* Sidebar */}
-      <nav className="w-full md:w-64 bg-white border-b md:border-r border-zinc-200 p-4 flex flex-col gap-2">
+      {/* Sidebar - Desktop */}
+      <nav className="hidden md:flex w-64 bg-white border-r border-zinc-200 p-4 flex-col gap-2 sticky top-0 h-screen">
         <div className="flex items-center gap-3 px-2 py-4 mb-4">
           <div className="w-10 h-10 bg-zinc-900 rounded-xl flex items-center justify-center">
             <TrendingUp className="text-white w-6 h-6" />
@@ -602,7 +614,13 @@ export default function App() {
         
         <div className="mt-auto pt-4 border-t border-zinc-100">
           <div className="flex items-center gap-3 px-2 py-3 mb-2">
-            <img src={user.photoURL || ''} alt="" className="w-8 h-8 rounded-full" />
+            {user.photoURL ? (
+              <img src={user.photoURL} alt="" className="w-8 h-8 rounded-full" />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center">
+                <UserIcon size={16} className="text-zinc-400" />
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-zinc-900 truncate">{user.displayName}</p>
               <p className="text-xs text-zinc-500 truncate">{user.email}</p>
@@ -618,19 +636,69 @@ export default function App() {
         </div>
       </nav>
 
+      {/* Mobile Top Header */}
+      <div className="md:hidden bg-white border-b border-zinc-200 p-4 sticky top-0 z-40 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-zinc-900 rounded-xl flex items-center justify-center shadow-lg shadow-zinc-200">
+            <TrendingUp className="text-white w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-lg font-black tracking-tight text-zinc-900">SpendWise</h1>
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+              {user?.displayName ? `Hi, ${user.displayName.split(' ')[0]}` : 'Welcome back'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={handleLogout}
+            className="p-2 text-zinc-400 hover:text-red-600 transition-colors btn-touch"
+            title="Logout"
+          >
+            <LogOut size={20} />
+          </button>
+          {user.photoURL ? (
+            <img src={user.photoURL} alt="" className="w-8 h-8 rounded-full border border-zinc-200" />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center border border-zinc-200">
+              <UserIcon size={16} className="text-zinc-400" />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Bottom Navigation - Mobile */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-200 px-2 py-2 z-50 flex items-center justify-around">
+        <MobileNavButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<LayoutDashboard size={20} />} label="Home" />
+        <MobileNavButton active={activeTab === 'expenses'} onClick={() => setActiveTab('expenses')} icon={<History size={20} />} label="History" />
+        <div className="w-12"></div> {/* Spacer for FAB */}
+        <MobileNavButton active={activeTab === 'budgets'} onClick={() => setActiveTab('budgets')} icon={<Bell size={20} />} label="Budgets" />
+        <MobileNavButton active={activeTab === 'accounts'} onClick={() => setActiveTab('accounts')} icon={<Wallet size={20} />} label="Accounts" />
+      </nav>
+
+      {/* Floating Action Button - Mobile */}
+      <div className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60]">
+        <button 
+          onClick={() => setShowAddExpense(true)}
+          className="w-14 h-14 bg-zinc-900 text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-transform"
+        >
+          <Plus size={28} />
+        </button>
+      </div>
+
       {/* Main Content */}
       <main className="flex-1 p-4 md:p-8 overflow-y-auto">
-        <header className="flex items-center justify-between mb-8">
-          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+        <header className="flex flex-col gap-6 mb-8">
+          <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-zinc-900">
+              <h2 className="text-2xl md:text-3xl font-bold text-zinc-900">
                 {activeTab === 'dashboard' && 'Financial Overview'}
                 {activeTab === 'expenses' && 'Transaction History'}
                 {activeTab === 'accounts' && 'Payment Methods'}
                 {activeTab === 'budgets' && 'Budget Planning'}
                 {activeTab === 'recurring' && 'Recurring Expenses'}
               </h2>
-              <p className="text-zinc-500">
+              <p className="text-zinc-500 text-sm md:text-base">
                 {activeTab === 'dashboard' && 'Your spending habits at a glance'}
                 {activeTab === 'expenses' && 'Keep track of every penny'}
                 {activeTab === 'accounts' && 'Manage your cards and wallets'}
@@ -638,104 +706,169 @@ export default function App() {
                 {activeTab === 'recurring' && 'Automate your regular bills'}
               </p>
             </div>
+            
+            <div className="hidden md:flex gap-3">
+              {activeTab === 'budgets' && (
+                <button 
+                  onClick={() => setShowAddBudget(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 transition-all font-medium shadow-lg shadow-zinc-200"
+                >
+                  <PlusCircle size={18} />
+                  Set Budget
+                </button>
+              )}
+              {activeTab === 'recurring' && (
+                <button 
+                  onClick={() => setShowAddRecurring(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 transition-all font-medium shadow-lg shadow-zinc-200"
+                >
+                  <PlusCircle size={18} />
+                  Add Recurring
+                </button>
+              )}
+              {activeTab !== 'budgets' && activeTab !== 'recurring' && (
+                <>
+                  <button 
+                    onClick={() => setShowAddAccount(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-white border border-zinc-200 text-zinc-700 rounded-xl hover:bg-zinc-50 transition-all font-medium"
+                  >
+                    <Plus size={18} />
+                    Add Account
+                  </button>
+                  <button 
+                    onClick={() => setShowAddExpense(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 transition-all font-medium shadow-lg shadow-zinc-200"
+                  >
+                    <PlusCircle size={18} />
+                    New Expense
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
 
-            {(activeTab === 'dashboard' || activeTab === 'expenses') && (
-              <div className="flex flex-wrap gap-2 mt-2 md:mt-0 md:ml-4">
-                <div className="relative">
+          {(activeTab === 'dashboard' || activeTab === 'expenses') && (
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col md:flex-row gap-3">
+                <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
                   <input 
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search expenses..."
-                    className="pl-9 pr-4 py-2 bg-white border border-zinc-200 text-sm rounded-xl outline-none focus:ring-2 focus:ring-zinc-900 w-full md:w-48"
+                    className="pl-9 pr-4 py-2.5 bg-white border border-zinc-200 text-sm rounded-xl outline-none focus:ring-2 focus:ring-zinc-900 w-full"
                   />
                 </div>
-                <select 
-                  value={filterCategory}
-                  onChange={(e) => setFilterCategory(e.target.value)}
-                  className="bg-white border border-zinc-200 text-sm rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-zinc-900"
-                >
-                  <option value="All">All Categories</option>
-                  {CATEGORIES.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-                <select 
-                  value={filterMonth}
-                  onChange={(e) => setFilterMonth(e.target.value)}
-                  className="bg-white border border-zinc-200 text-sm rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-zinc-900"
-                >
-                  <option value="All">All Months</option>
-                  {monthOptions.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                <select 
-                  value={filterYear}
-                  onChange={(e) => setFilterYear(e.target.value)}
-                  className="bg-white border border-zinc-200 text-sm rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-zinc-900"
-                >
-                  <option value="All">All Years</option>
-                  {yearOptions.map(year => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
-                {(filterCategory !== 'All' || filterMonth !== 'All' || filterYear !== 'All' || searchQuery !== '') && (
+                <div className="grid grid-cols-2 md:flex gap-2">
+                  <select 
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    className="bg-white border border-zinc-200 text-sm rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-zinc-900"
+                  >
+                    <option value="All">All Categories</option>
+                    {CATEGORIES.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                  <select 
+                    value={filterMonth}
+                    onChange={(e) => setFilterMonth(e.target.value)}
+                    className="bg-white border border-zinc-200 text-sm rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-zinc-900"
+                  >
+                    <option value="All">All Months</option>
+                    {monthOptions.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center justify-between md:justify-start gap-2">
+                  <select 
+                    value={filterYear}
+                    onChange={(e) => setFilterYear(e.target.value)}
+                    className="bg-white border border-zinc-200 text-sm rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-zinc-900 flex-1 md:flex-none"
+                  >
+                    <option value="All">All Years</option>
+                    {yearOptions.map(year => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col md:flex-row items-center gap-3 bg-white p-3 rounded-2xl border border-zinc-100">
+                <div className="flex items-center gap-2 text-zinc-500 text-xs font-bold uppercase tracking-wider">
+                  <Calendar size={14} />
+                  <span>Date Range</span>
+                </div>
+                <div className="flex flex-1 items-center gap-2 w-full">
+                  <div className="flex-1">
+                    <input 
+                      type="date"
+                      value={filterStartDate}
+                      onChange={(e) => setFilterStartDate(e.target.value)}
+                      className="w-full bg-zinc-50 border border-zinc-100 text-xs rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-zinc-900"
+                    />
+                  </div>
+                  <span className="text-zinc-300">to</span>
+                  <div className="flex-1">
+                    <input 
+                      type="date"
+                      value={filterEndDate}
+                      onChange={(e) => setFilterEndDate(e.target.value)}
+                      className="w-full bg-zinc-50 border border-zinc-100 text-xs rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-zinc-900"
+                    />
+                  </div>
+                </div>
+                {(filterCategory !== 'All' || filterMonth !== 'All' || filterYear !== 'All' || searchQuery !== '' || filterStartDate !== '' || filterEndDate !== '') && (
                   <button 
                     onClick={() => { 
                       setFilterCategory('All'); 
                       setFilterMonth('All'); 
                       setFilterYear('All');
+                      setFilterStartDate('');
+                      setFilterEndDate('');
                       setSearchQuery('');
                     }}
-                    className="text-xs font-bold text-zinc-400 hover:text-zinc-900 px-2"
+                    className="text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-red-600 px-3 py-2 bg-zinc-50 rounded-lg transition-colors whitespace-nowrap"
                   >
-                    Clear
+                    Clear Filters
                   </button>
                 )}
               </div>
-            )}
-          </div>
-          <div className="flex gap-3">
-            {activeTab === 'budgets' && (
-              <button 
-                onClick={() => setShowAddBudget(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 transition-all font-medium shadow-lg shadow-zinc-200"
-              >
-                <PlusCircle size={18} />
-                Set Budget
-              </button>
-            )}
-            {activeTab === 'recurring' && (
-              <button 
-                onClick={() => setShowAddRecurring(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 transition-all font-medium shadow-lg shadow-zinc-200"
-              >
-                <PlusCircle size={18} />
-                Add Recurring
-              </button>
-            )}
-            {activeTab !== 'budgets' && activeTab !== 'recurring' && (
-              <>
-                <button 
-                  onClick={() => setShowAddAccount(true)}
-                  className="hidden md:flex items-center gap-2 px-4 py-2 bg-white border border-zinc-200 text-zinc-700 rounded-xl hover:bg-zinc-50 transition-all font-medium"
-                >
-                  <Plus size={18} />
-                  Add Account
-                </button>
-                <button 
-                  onClick={() => setShowAddExpense(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 transition-all font-medium shadow-lg shadow-zinc-200"
-                >
-                  <PlusCircle size={18} />
-                  New Expense
-                </button>
-              </>
-            )}
-          </div>
+            </div>
+          )}
+
+          {/* Mobile Quick Actions for other tabs */}
+          {activeTab === 'budgets' && (
+            <button 
+              onClick={() => setShowAddBudget(true)}
+              className="md:hidden flex items-center justify-center gap-2 w-full py-3 bg-zinc-900 text-white rounded-xl font-bold shadow-lg btn-touch"
+            >
+              <PlusCircle size={20} />
+              Set New Budget
+            </button>
+          )}
+          {activeTab === 'recurring' && (
+            <button 
+              onClick={() => setShowAddRecurring(true)}
+              className="md:hidden flex items-center justify-center gap-2 w-full py-3 bg-zinc-900 text-white rounded-xl font-bold shadow-lg btn-touch"
+            >
+              <PlusCircle size={20} />
+              Add Recurring Expense
+            </button>
+          )}
+          {activeTab === 'accounts' && (
+            <button 
+              onClick={() => setShowAddAccount(true)}
+              className="md:hidden flex items-center justify-center gap-2 w-full py-3 bg-white border border-zinc-200 text-zinc-900 rounded-xl font-bold shadow-sm btn-touch"
+            >
+              <Plus size={20} />
+              Add New Account
+            </button>
+          )}
         </header>
+
 
         <AnimatePresence mode="wait">
           {activeTab === 'dashboard' && (
@@ -907,7 +1040,7 @@ export default function App() {
               ))}
               <button 
                 onClick={() => setShowAddAccount(true)}
-                className="bg-zinc-50 border-2 border-dashed border-zinc-200 rounded-3xl flex flex-col items-center justify-center p-8 text-zinc-400 hover:text-zinc-900 hover:border-zinc-900 transition-all gap-2"
+                className="bg-zinc-50 border-2 border-dashed border-zinc-200 rounded-3xl flex flex-col items-center justify-center p-8 text-zinc-400 hover:text-zinc-900 hover:border-zinc-900 transition-all gap-2 btn-touch"
               >
                 <Plus size={32} />
                 <span className="font-bold">Add New Account</span>
@@ -971,7 +1104,7 @@ export default function App() {
               })}
               <button 
                 onClick={() => setShowAddBudget(true)}
-                className="bg-zinc-50 border-2 border-dashed border-zinc-200 rounded-3xl flex flex-col items-center justify-center p-8 text-zinc-400 hover:text-zinc-900 hover:border-zinc-900 transition-all gap-2"
+                className="bg-zinc-50 border-2 border-dashed border-zinc-200 rounded-3xl flex flex-col items-center justify-center p-8 text-zinc-400 hover:text-zinc-900 hover:border-zinc-900 transition-all gap-2 btn-touch"
               >
                 <Plus size={32} />
                 <span className="font-bold">Set New Budget</span>
@@ -1014,7 +1147,7 @@ export default function App() {
               ))}
               <button 
                 onClick={() => setShowAddRecurring(true)}
-                className="bg-zinc-50 border-2 border-dashed border-zinc-200 rounded-3xl flex flex-col items-center justify-center p-8 text-zinc-400 hover:text-zinc-900 hover:border-zinc-900 transition-all gap-2"
+                className="bg-zinc-50 border-2 border-dashed border-zinc-200 rounded-3xl flex flex-col items-center justify-center p-8 text-zinc-400 hover:text-zinc-900 hover:border-zinc-900 transition-all gap-2 btn-touch"
               >
                 <Plus size={32} />
                 <span className="font-bold">Add Recurring Expense</span>
@@ -1174,15 +1307,31 @@ function NavButton({ active, icon, label, onClick }: { active: boolean, icon: Re
   );
 }
 
-function StatCard({ label, value, icon, color, isCurrency = true }: { label: string, value: number, icon: React.ReactNode, color: string, isCurrency?: boolean }) {
+function MobileNavButton({ active, icon, label, onClick }: { active: boolean, icon: React.ReactNode, label: string, onClick: () => void }) {
   return (
-    <div className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm flex items-center gap-4">
-      <div className={`p-4 rounded-2xl ${color}`}>
+    <button 
+      onClick={onClick}
+      className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all ${
+        active ? 'text-zinc-900' : 'text-zinc-400'
+      }`}
+    >
+      <div className={`p-1 rounded-lg transition-colors ${active ? 'bg-zinc-100' : ''}`}>
         {icon}
       </div>
-      <div>
-        <p className="text-sm font-medium text-zinc-500">{label}</p>
-        <p className="text-2xl font-bold text-zinc-900">
+      <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
+    </button>
+  );
+}
+
+function StatCard({ label, value, icon, color, isCurrency = true }: { label: string, value: number, icon: React.ReactNode, color: string, isCurrency?: boolean }) {
+  return (
+    <div className="bg-white p-5 md:p-6 rounded-3xl border border-zinc-200 shadow-sm flex items-center gap-4 btn-touch">
+      <div className={`p-3 md:p-4 rounded-2xl ${color} shrink-0`}>
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs md:text-sm font-medium text-zinc-500 truncate">{label}</p>
+        <p className="text-xl md:text-2xl font-bold text-zinc-900 truncate">
           {isCurrency ? `₹${value.toLocaleString()}` : value}
         </p>
       </div>
@@ -1198,9 +1347,9 @@ interface ExpenseItemProps {
 
 function ExpenseItem({ expense, onDelete }: ExpenseItemProps) {
   return (
-    <div className="group flex items-center justify-between p-4 hover:bg-zinc-50 transition-all">
-      <div className="flex items-center gap-4">
-        <div className="w-12 h-12 bg-zinc-100 rounded-xl flex items-center justify-center text-zinc-500">
+    <div className="group flex items-center justify-between p-3 md:p-4 hover:bg-zinc-50 transition-all active:bg-zinc-100 btn-touch">
+      <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+        <div className="w-10 h-10 md:w-12 md:h-12 bg-zinc-100 rounded-xl flex items-center justify-center text-lg md:text-xl shrink-0">
           {expense.category === 'Food' && '🍔'}
           {expense.category === 'Entertainment' && '🎬'}
           {expense.category === 'Transport' && '🚗'}
@@ -1210,20 +1359,23 @@ function ExpenseItem({ expense, onDelete }: ExpenseItemProps) {
           {expense.category === 'Education' && '📚'}
           {expense.category === 'Others' && '📦'}
         </div>
-        <div>
-          <p className="font-bold text-zinc-900">{expense.description || expense.category}</p>
-          <div className="flex items-center gap-2 text-xs text-zinc-500">
-            <span>{expense.paymentMethodName}</span>
-            <span>•</span>
-            <span>{format(parseISO(expense.date), 'MMM d, h:mm a')}</span>
+        <div className="min-w-0 flex-1">
+          <p className="font-bold text-zinc-900 truncate text-sm md:text-base">{expense.description || expense.category}</p>
+          <div className="flex items-center gap-1.5 text-[10px] md:text-xs text-zinc-500">
+            <span className="truncate">{expense.paymentMethodName}</span>
+            <span className="shrink-0">•</span>
+            <span className="shrink-0">{format(parseISO(expense.date), 'MMM d, h:mm a')}</span>
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-4">
-        <p className="text-lg font-bold text-zinc-900">-₹{expense.amount.toLocaleString()}</p>
+      <div className="flex items-center gap-2 md:gap-4 ml-2">
+        <p className="text-base md:text-lg font-bold text-zinc-900 shrink-0">-₹{expense.amount.toLocaleString()}</p>
         <button 
-          onClick={() => onDelete()}
-          className="p-2 text-zinc-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className="p-2 text-zinc-300 hover:text-red-600 md:opacity-0 group-hover:opacity-100 transition-all"
         >
           <Trash2 size={18} />
         </button>
@@ -1234,27 +1386,31 @@ function ExpenseItem({ expense, onDelete }: ExpenseItemProps) {
 
 function Modal({ title, children, onClose }: { title: string, children: React.ReactNode, onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-4">
       <motion.div 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
-        className="absolute inset-0 bg-zinc-900/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-zinc-900/60 backdrop-blur-sm"
       />
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden"
+        initial={{ opacity: 0, y: '100%' }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        className="relative w-full max-w-lg bg-white rounded-t-[2.5rem] md:rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
       >
-        <div className="p-6 border-b border-zinc-100 flex items-center justify-between">
+        <div className="md:hidden flex justify-center pt-3 shrink-0">
+          <div className="w-12 h-1.5 bg-zinc-200 rounded-full" />
+        </div>
+        <div className="p-6 border-b border-zinc-100 flex items-center justify-between shrink-0">
           <h3 className="text-xl font-bold text-zinc-900">{title}</h3>
           <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-xl transition-all">
             <X size={20} />
           </button>
         </div>
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto">
           {children}
         </div>
       </motion.div>
